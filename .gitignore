@@ -1,6 +1,4 @@
 /.venv
 /.vscode
 /__pycache__
-/my_db.db
-/sql_app.db
-/utils.zip
+*.pyc*
