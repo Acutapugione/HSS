@@ -27,10 +27,12 @@ Job Application Tracking: Human resources personnel can oversee the entire job a
 FastHealthAPI is an invaluable tool for healthcare unit administrators and managers seeking a reliable, secure, and efficient system for managing staff, employees, service departments, and job applications within the Ukrainian healthcare sector. Built on the FastAPI framework, it offers a powerful and scalable solution to optimize healthcare operations.
 """
 from fastapi import FastAPI, Depends
+from typing import Annotated
 from database import  *
 from utils import generate_pydantic_models
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import logging
 
 
@@ -44,25 +46,7 @@ app = FastAPI(
     """,
     version="0.0.1"
     )
-def my_function(x, y):
-    """
-    This function calculates the sum and difference of two numbers.
 
-    Args:
-        x (int): The first number.
-        y (int): The second number.
-
-    Returns:
-        tuple: A tuple containing the sum and difference of x and y.
-
-    Examples:
-
-    ```
-    >>> my_function(15, 3)  # Output: (8, 2)
-    >>> my_function(-2, 1254)  # Output: (2, -6)
-    ```
-    """
-    ...
 
 # Dependency
 def get_db():
@@ -78,17 +62,23 @@ def get_db():
     finally:
         db.close()
         
-# from pydantic import BaseModel
-# from .. import app
-
-# class Access(BaseModel):
-#     item_id:int
-
-# @app.put("/access/{item_id}")
-# def update_item(item_id: int, item: Access):
-#     return {"name": item.name, "item_id": item_id}
-
-pydantic_models = generate_pydantic_models(Base.metadata, "Base")
+security = HTTPBasic()
+@app.get(
+    "/users/me/"
+)
+def read_curr_user(credentials: Annotated[HTTPBasicCredentials, Depends(security)],  db: Session = Depends(get_db)):
+    user = db.query(User).where(User.username == credentials.username, User.pwd == credentials.password).first()
+    if user:
+        return { 
+                "status" : True,
+                "username" : credentials.username, 
+                "password" : credentials.password 
+                }
+    return {
+        "status" : False
+    }
+    
+pydantic_models = generate_pydantic_models(Base.metadata, "Base", exclude_tables=[User, ])
 for model in pydantic_models:
     name = model.get('name')
     base_schema = model.get('base')
@@ -117,11 +107,3 @@ for model in pydantic_models:
     def get_item(id: int, db: Session = Depends(get_db)):
         return db.query(db_class).first()
 
-        
-    # @app.put(path=f'/{name}/'+'{id}', response_model=main_schema)
-    # def update_item(id: int, item: create_schema, db: Session = Depends(get_db)):
-    #     with Session(engine) as session:
-    #         obj = session.scalars(select(db_class)).one()
-    #         if obj:
-    #             obj
-    #         return item

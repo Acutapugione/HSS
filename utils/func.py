@@ -3,11 +3,13 @@ from sqlalchemy import MetaData
 from functools import wraps
 
 
-def generate_pydantic_models(meta: MetaData, base_postfix: str = "Base", create_postfix: str = "Create", full_postfix: str = "", base_model_exclude_columns: [] = []) -> [type]:
+def generate_pydantic_models(meta: MetaData, base_postfix: str = "Base", create_postfix: str = "Create", full_postfix: str = "", base_model_exclude_columns: [] = [], exclude_tables: [] = []) -> [type]:
     "Function to generate Pydantic models from SQLAlchemy metadata"
     pydantic_models = []
-
+    print(exclude_tables)
     for name, model in meta.tables.items():
+        if model in exclude_tables:
+            continue
         # parse columns in Base model
         columns = list(
             filter(lambda col: col.name not in base_model_exclude_columns, model.columns))

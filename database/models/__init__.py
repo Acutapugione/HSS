@@ -6,3 +6,4 @@ from .employee import Employee
 from .job_application import JobApplication
 from .state import State
 from .priority import Priority
+from .user import User
