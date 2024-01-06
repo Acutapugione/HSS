@@ -2,8 +2,10 @@ from database import migrate, Base
 from uvicorn import run
 from utils import generate_pydantic_models
 from app import app
+import logging
 
 
+logging.basicConfig(level=logging.INFO)
 migrate()
 
 
@@ -14,4 +16,4 @@ if __name__ == "__main__":
     # print(globals().get('Access'))
     
     
-    run("main:app", reload=True)
+    run("main:app", reload=False)

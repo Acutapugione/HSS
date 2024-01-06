@@ -3,11 +3,13 @@ from sqlalchemy import MetaData
 from functools import wraps
 
 
+
 def generate_pydantic_models(meta: MetaData, base_postfix: str = "Base", create_postfix: str = "Create", full_postfix: str = "", base_model_exclude_columns: [] = [], exclude_tables: [] = []) -> [type]:
     "Function to generate Pydantic models from SQLAlchemy metadata"
     pydantic_models = []
     print(exclude_tables)
     for name, model in meta.tables.items():
+        print(name)
         if model in exclude_tables:
             continue
         # parse columns in Base model
@@ -20,6 +22,7 @@ def generate_pydantic_models(meta: MetaData, base_postfix: str = "Base", create_
         full_model_columns = [(col.name, col.type.python_type)
                               for col in base_model_excluded_columns]
 
+        
         # create annotations
         excluded_annotations = {}
         for column in base_model_excluded_columns:
@@ -36,9 +39,18 @@ def generate_pydantic_models(meta: MetaData, base_postfix: str = "Base", create_
         
         bases = (BaseModel,)
         base_model = type(cls_name, bases, {})
+        # inner_cls = type(
+        #     'Config',
+        #     (),
+        #     {}
+        # )
+        # setattr(inner_cls, 'allow_population_by_field_name', True)
+        # setattr(base_model, inner_cls.__name__, inner_cls)
+
         for key, val in dict(model_columns).items():
             setattr(base_model, key, None)
         # apply annotations
+        
         setattr(base_model, "__annotations__", model_annotations)
         pydantic_model["base"] = base_model
 
@@ -46,19 +58,24 @@ def generate_pydantic_models(meta: MetaData, base_postfix: str = "Base", create_
         cls_name = "".join([ n.title() for n in name.split('_')])
         cls_name = f"{cls_name}{create_postfix}"
         bases = (base_model,)
+        
         create_model = type(cls_name, bases, {})
+
         pydantic_model["create"] = create_model
 
         # create pydantic full model
         cls_name = "".join([ n.title() for n in name.split('_')])
         cls_name = f"{cls_name}{full_postfix}"
+        
         bases = (base_model,)
         inner_cls = type(
             'Config',
             (),
             {}
         )
+
         setattr(inner_cls, 'orm_mode', True)
+        
         full_model = type(cls_name, bases, {})
         for key, val in dict(full_model_columns).items():
             setattr(full_model, key, None)
