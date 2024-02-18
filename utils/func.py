@@ -46,7 +46,9 @@ def generate_model(
 def generate_pydantic_models(
     meta: MetaData,
     create_postfix: str = "Create",
-    full_postfix: str = "Full",
+    update_postfix: str = "Update",
+    
+    base_postfix: str = "Base",
     base_model_exclude_columns: List[str] = [
         "id",
     ],
@@ -78,7 +80,7 @@ def generate_pydantic_models(
 
         inner_cls = type("Config", (), {})
         inner_cls.orm_mode = True
-        
+        update_annotations = dict(create_annotations, **model_annotations)
 
         base = generate_model(
             name=f"{cls_name}Base",
@@ -90,9 +92,16 @@ def generate_pydantic_models(
             inheritanced=(base,),
             fields=create_annotations,
         )
-
+        model_update = generate_model(
+            name=f"{cls_name}{update_postfix}",
+            inheritanced=(model_create,),
+            fields=update_annotations,
+            inner_classes=[
+                inner_cls,
+            ],
+        )
         model_base = generate_model(
-            name=f"{cls_name}{full_postfix}",
+            name=f"{cls_name}{base_postfix}",
             inheritanced=(model_create,),
             fields=model_annotations,
             inner_classes=[
@@ -101,6 +110,7 @@ def generate_pydantic_models(
         )
         # pydantic_model["base"] = base
         pydantic_model["base_schema"] = schema_factory(model_base)
+        pydantic_model["update_schema"] = schema_factory(model_update)
         pydantic_model["create_schema"] = schema_factory(model_create)
         pydantic_models.append(pydantic_model)
 
