@@ -5,7 +5,6 @@ from loguru import logger
 
 log_format = "{time:YYYY-MM-DD at HH:mm:ss} : {message}"
 logger.add("logs/info.log", format=log_format, level="INFO")
-logger.add("logs/debug.log", format=log_format, level="DEBUG")
 logger.add("logs/error.log", format=log_format, level="ERROR")
 logger.add("logs/warning.log",  format=log_format, level="WARNING")
 

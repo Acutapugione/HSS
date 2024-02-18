@@ -26,18 +26,27 @@ Job Application Tracking: Human resources personnel can oversee the entire job a
 
 FastHealthAPI is an invaluable tool for healthcare unit administrators and managers seeking a reliable, secure, and efficient system for managing staff, employees, service departments, and job applications within the Ukrainian healthcare sector. Built on the FastAPI framework, it offers a powerful and scalable solution to optimize healthcare operations.
 """
-from pprint import pprint
-from fastapi import FastAPI, Depends, APIRouter
-from typing import Annotated
-from database import *
-from utils import generate_pydantic_models
-from sqlalchemy import select
-from . routes import generate_crud_routers
-from sqlalchemy.orm import Session
+
+from fastapi import (
+    FastAPI,
+    Depends,
+    APIRouter,
+    Request,
+    HTTPException,
+    status,
+)
+
+from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+import secrets
+from sqlalchemy.orm import Session
+from typing import Annotated
+from loguru import logger
 
 
-from database import migrate, Base
+from database import Base, get_db, User
+from utils import generate_pydantic_models
+from .routes import generate_crud_routers
 
 
 app = FastAPI(
@@ -51,39 +60,67 @@ app = FastAPI(
     version="0.0.1",
 )
 
+
 db_crud_router = APIRouter()
 
 pydantic_models = generate_pydantic_models(
     Base.metadata,
     "Base",
-    base_model_exclude_columns=["id",],
+    base_model_exclude_columns=[
+        "id",
+    ],
     exclude_tables=[
         "user",
-    ]
+    ],
 )
 for router in generate_crud_routers(pydantic_models):
     db_crud_router.include_router(router)
 
 app.include_router(db_crud_router)
 
+
 security = HTTPBasic()
 
 
-@app.get(
-    "/users/me/"
-)
-def read_curr_user(credentials: Annotated[HTTPBasicCredentials, Depends(security)],  db: Session = Depends(get_db)):
-    user = db.query(User).where(User.username == credentials.username,
-                                User.pwd == credentials.password).first()
+def get_user(credentials: Annotated[HTTPBasicCredentials, Depends(security)], db: Session = Depends(get_db),):
+    user = (
+        db.query(User)
+        .where(User.username == credentials.username)
+        .first()
+    )
     if user:
-        return {
-            "status": True,
-            "username": credentials.username,
-            "password": credentials.password
-        }
-    return {
-        "status": False
-    }
+        current_password_bytes = credentials.password.encode("utf8")
+        correct_password_bytes = user.pwd.encode("utf8")
+        is_correct_password = secrets.compare_digest(
+            current_password_bytes, correct_password_bytes
+        )
+        if is_correct_password:
+            return True
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Incorrect username or password",
+        headers={"WWW-Authenticate": "Basic"},
+    )
 
 
-# pprint(globals())
+@app.get("/users/me/")
+def read_curr_user(
+    status: Annotated[bool, Depends(get_user)]
+):
+    return status
+
+
+PATH_LIST = [x.path for x in app.routes]
+
+
+@app.middleware("http")
+async def add_wrong_request_path_redirect(request: Request, call_next):
+    print(request.headers)
+    url = request.url.path
+    if url in PATH_LIST:
+        response = await call_next(request)
+        logger.info(
+            f"{request.client} : {request.url} -> {response.status_code}")
+    else:
+        response = RedirectResponse(PATH_LIST[-1])
+    return response

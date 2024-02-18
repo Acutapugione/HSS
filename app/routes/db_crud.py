@@ -1,15 +1,13 @@
-from typing import Annotated
-from fastapi import APIRouter, Query, Request, Depends
-from fastapi.routing import APIRoute
+from fastapi import APIRouter
 from fastapi_crudrouter import SQLAlchemyCRUDRouter
-from database import Session, Base, get_db, get_model
+from database import get_db, get_model
 from database.models.user import User
 from loguru import logger
-from utils import generate_pydantic_models, schema_factory
+
 
 crud_router = APIRouter()
 
-
+@logger.catch
 def generate_crud_routers(pydantic_models:list)->list[SQLAlchemyCRUDRouter]:
     crud_routers = []
     
