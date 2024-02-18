@@ -26,14 +26,18 @@ Job Application Tracking: Human resources personnel can oversee the entire job a
 
 FastHealthAPI is an invaluable tool for healthcare unit administrators and managers seeking a reliable, secure, and efficient system for managing staff, employees, service departments, and job applications within the Ukrainian healthcare sector. Built on the FastAPI framework, it offers a powerful and scalable solution to optimize healthcare operations.
 """
-from fastapi import FastAPI, Depends
+from pprint import pprint
+from fastapi import FastAPI, Depends, APIRouter
 from typing import Annotated
-from database import  *
+from database import *
 from utils import generate_pydantic_models
 from sqlalchemy import select
+from . routes import generate_crud_routers
 from sqlalchemy.orm import Session
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
-import logging
+
+
+from database import migrate, Base
 
 
 app = FastAPI(
@@ -44,66 +48,42 @@ app = FastAPI(
     Designed to streamline operations and enhance organizational efficiency, 
     this API empowers users to handle various aspects crucial to healthcare management.
     """,
-    version="0.0.1"
-    )
+    version="0.0.1",
+)
 
+db_crud_router = APIRouter()
 
-# Dependency
-def get_db():
-    """
-    docs
-    ```python
-    get_db()
-    ```
-    """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-        
+pydantic_models = generate_pydantic_models(
+    Base.metadata,
+    "Base",
+    base_model_exclude_columns=["id",],
+    exclude_tables=[
+        "user",
+    ]
+)
+for router in generate_crud_routers(pydantic_models):
+    db_crud_router.include_router(router)
+
+app.include_router(db_crud_router)
+
 security = HTTPBasic()
+
+
 @app.get(
     "/users/me/"
 )
 def read_curr_user(credentials: Annotated[HTTPBasicCredentials, Depends(security)],  db: Session = Depends(get_db)):
-    user = db.query(User).where(User.username == credentials.username, User.pwd == credentials.password).first()
+    user = db.query(User).where(User.username == credentials.username,
+                                User.pwd == credentials.password).first()
     if user:
-        return { 
-                "status" : True,
-                "username" : credentials.username, 
-                "password" : credentials.password 
-                }
+        return {
+            "status": True,
+            "username": credentials.username,
+            "password": credentials.password
+        }
     return {
-        "status" : False
+        "status": False
     }
-    
-pydantic_models = generate_pydantic_models(Base.metadata, "Base", exclude_tables=[User, ])
-for model in pydantic_models:
-    name = model.get('name')
-    base_schema = model.get('base')
-    create_schema = model.get('create')
-    main_schema = model.get('full')
-    db_class = model.get('db_class')
-    
-    @app.post(path=f'/{name}/create', response_model=main_schema)
-    def create_item(item: create_schema, db: Session = Depends(get_db)):
-        try:
-            new_item = globals().get(name)(**item.dict())
-            logging.info(new_item)
-            db.add(new_item)
-            db.commit()
-            db.refresh(new_item)
-        except Exception as e:
-            db.rollback()
-            logging.exception(msg=str(e))
-        return item
-            
-    @app.get(path=f'/{name}/items', response_model=list[main_schema])
-    def get_items(db: Session = Depends(get_db)):
-        return db.query(db_class).all()
 
-    @app.get(path=f'/{name}/'+'{id}', response_model=main_schema)
-    def get_item(id: int, db: Session = Depends(get_db)):
-        return db.query(db_class).first()
 
+# pprint(globals())

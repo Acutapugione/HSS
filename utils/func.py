@@ -1,88 +1,107 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, create_model
 from sqlalchemy import MetaData
-from functools import wraps
+from loguru import logger
+from typing import Callable, Type, TypeVar
+from typing import Dict, List, Optional, Tuple
 
 
+T = TypeVar("T", bound=BaseModel)
 
-def generate_pydantic_models(meta: MetaData, base_postfix: str = "Base", create_postfix: str = "Create", full_postfix: str = "", base_model_exclude_columns: [] = [], exclude_tables: [] = []) -> [type]:
+def schema_factory(
+    schema_cls: Type[T], pk_field_name: str = "id", name: str = "Create"
+) -> Type[T]:
+    """
+    Is used to create a CreateSchema which does not contain pk
+    """
+
+    fields = {
+        name: (f.annotation, ...)
+        for name, f in schema_cls.model_fields.items()
+        if name != pk_field_name
+    }
+
+    name = schema_cls.__name__ + name
+    schema: Type[T] = create_model(__model_name=name, **fields)  # type: ignore
+    return schema
+
+
+def generate_model(
+    name: str,
+    inheritanced: Tuple[type] = [],
+    fields: Dict[str, type] = {},
+    inner_classes: List[type] = [],
+) -> type:
+    model_fields = fields.copy()
+    model = type(name, inheritanced, {})
+    for field, type_ in model_fields.items():
+        setattr(model, field, Field())
+    for inner_cls in inner_classes:
+        setattr(model, inner_cls.__name__, inner_cls)
+    model.__annotations__ = model_fields
+
+    return model
+
+
+@logger.catch
+def generate_pydantic_models(
+    meta: MetaData,
+    create_postfix: str = "Create",
+    full_postfix: str = "Full",
+    base_model_exclude_columns: List[str] = [
+        "id",
+    ],
+    exclude_tables: List[str] = [],
+) -> List[Type]:
     "Function to generate Pydantic models from SQLAlchemy metadata"
     pydantic_models = []
-    print(exclude_tables)
+
     for name, model in meta.tables.items():
-        print(name)
-        if model in exclude_tables:
+
+        if model in exclude_tables or name in exclude_tables:
             continue
+        cls_name = "".join([n.title() for n in name.split("_")])
+        pydantic_model = {"name": str(cls_name)}
         # parse columns in Base model
         columns = list(
-            filter(lambda col: col.name not in base_model_exclude_columns, model.columns))
-        base_model_excluded_columns = list(
-            filter(lambda col: col.name in base_model_exclude_columns, model.columns))
+            filter(
+                lambda col: col.name not in base_model_exclude_columns, model.columns
+            )
+        )
 
-        model_columns = [(col.name, col.type.python_type) for col in columns]
-        full_model_columns = [(col.name, col.type.python_type)
-                              for col in base_model_excluded_columns]
-
-        
-        # create annotations
-        excluded_annotations = {}
-        for column in base_model_excluded_columns:
-            excluded_annotations[column.name] = column.type.python_type
+        create_annotations = {}
+        for column in model.columns:
+            create_annotations[column.name] = column.type.python_type
 
         model_annotations = {}
         for column in columns:
             model_annotations[column.name] = column.type.python_type
 
-        # create pydantic Base model
-        cls_name = "".join([ n.title() for n in name.split('_')])
-        pydantic_model = {"name":str(cls_name)}
-        cls_name = f"{cls_name}{base_postfix}"
+        inner_cls = type("Config", (), {})
+        inner_cls.orm_mode = True
         
-        bases = (BaseModel,)
-        base_model = type(cls_name, bases, {})
-        # inner_cls = type(
-        #     'Config',
-        #     (),
-        #     {}
-        # )
-        # setattr(inner_cls, 'allow_population_by_field_name', True)
-        # setattr(base_model, inner_cls.__name__, inner_cls)
 
-        for key, val in dict(model_columns).items():
-            setattr(base_model, key, None)
-        # apply annotations
-        
-        setattr(base_model, "__annotations__", model_annotations)
-        pydantic_model["base"] = base_model
-
-        # create pydantic Create model
-        cls_name = "".join([ n.title() for n in name.split('_')])
-        cls_name = f"{cls_name}{create_postfix}"
-        bases = (base_model,)
-        
-        create_model = type(cls_name, bases, {})
-
-        pydantic_model["create"] = create_model
-
-        # create pydantic full model
-        cls_name = "".join([ n.title() for n in name.split('_')])
-        cls_name = f"{cls_name}{full_postfix}"
-        
-        bases = (base_model,)
-        inner_cls = type(
-            'Config',
-            (),
-            {}
+        base = generate_model(
+            name=f"{cls_name}Base",
+            inheritanced=(BaseModel,),
+            fields=create_annotations,
+        )
+        model_create = generate_model(
+            name=f"{cls_name}{create_postfix}",
+            inheritanced=(base,),
+            fields=create_annotations,
         )
 
-        setattr(inner_cls, 'orm_mode', True)
-        
-        full_model = type(cls_name, bases, {})
-        for key, val in dict(full_model_columns).items():
-            setattr(full_model, key, None)
-        setattr(full_model, "__annotations__", excluded_annotations)
-        setattr(full_model, inner_cls.__name__, inner_cls)
-        pydantic_model["full"] = full_model
-        pydantic_model["db_class"] = model
+        model_base = generate_model(
+            name=f"{cls_name}{full_postfix}",
+            inheritanced=(model_create,),
+            fields=model_annotations,
+            inner_classes=[
+                inner_cls,
+            ],
+        )
+        # pydantic_model["base"] = base
+        pydantic_model["base_schema"] = schema_factory(model_base)
+        pydantic_model["create_schema"] = schema_factory(model_create)
         pydantic_models.append(pydantic_model)
 
     return pydantic_models

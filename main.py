@@ -1,19 +1,20 @@
-from database import migrate, Base
+import warnings
+import sys
+warnings.filterwarnings('ignore', category=UserWarning)
+from loguru import logger
+
+log_format = "{time:YYYY-MM-DD at HH:mm:ss} : {message}"
+logger.add("logs/info.log", format=log_format, level="INFO")
+logger.add("logs/debug.log", format=log_format, level="DEBUG")
+logger.add("logs/error.log", format=log_format, level="ERROR")
+logger.add("logs/warning.log",  format=log_format, level="WARNING")
+
+
 from uvicorn import run
-from utils import generate_pydantic_models
+
 from app import app
-import logging
 
 
-logging.basicConfig(level=logging.INFO)
-migrate()
 
-
-if __name__ == "__main__":
-    # pydantic_models = generate_pydantic_models(Base.metadata, "Base")
-    # for key, val in pydantic_models.items():
-    #     globals()[key]=val
-    # print(globals().get('Access'))
-    
-    
-    run("main:app", reload=False)
+if __name__ == "__main__":   
+    run("main:app", reload=True)

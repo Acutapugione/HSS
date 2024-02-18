@@ -9,7 +9,7 @@ from sqlalchemy.orm import (
 
 
 class User(Base):
-    __tablename__ = "users"
+    __tablename__ = "user"
 
     username: Mapped[str] = mapped_column(unique=True)
     pwd: Mapped[str]
