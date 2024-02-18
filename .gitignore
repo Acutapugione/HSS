@@ -4,5 +4,5 @@
 /my_db.db
 /sql_app.db
 /utils.zip
-
+*.log
 *.pyc
