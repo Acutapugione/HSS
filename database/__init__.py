@@ -12,9 +12,9 @@ def migrate():
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     
-migrate()
+# migrate()
 
-# Dependency
+# Dependency injejcion
 def get_db():
     db = Session()
     try:
@@ -23,7 +23,6 @@ def get_db():
         db.close()
         
 def get_model(name):
-    
     if name in globals():
         if issubclass(globals().get(name), Base):
             return globals().get(name)
