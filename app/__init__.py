@@ -46,7 +46,7 @@ from loguru import logger
 
 from database import Base, get_db, User
 from utils import generate_pydantic_models
-from .routes import generate_crud_routers
+from .routes import generate_crud_routers, appeals_router
 
 
 app = FastAPI(
@@ -76,11 +76,9 @@ pydantic_models = generate_pydantic_models(
 for router in generate_crud_routers(pydantic_models):
     db_crud_router.include_router(router)
 
-app.include_router(db_crud_router)
 
 
 security = HTTPBasic()
-
 
 def get_user(credentials: Annotated[HTTPBasicCredentials, Depends(security)], db: Session = Depends(get_db),):
     user = (
@@ -108,6 +106,11 @@ def read_curr_user(
     status: Annotated[bool, Depends(get_user)]
 ):
     return status
+app.include_router(appeals_router)
+app.include_router(db_crud_router)
+
+
+
 
 
 PATH_LIST = [x.path for x in app.routes]
