@@ -7,7 +7,7 @@ fastapi-crudrouter==0.8.6
 greenlet==3.0.2
 h11==0.14.0
 httptools==0.6.1
-idna==3.6
+idna==3.7
 loguru==0.7.2
 pydantic==2.5.2
 pydantic_core==2.14.5
